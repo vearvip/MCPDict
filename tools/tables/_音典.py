@@ -11,9 +11,9 @@ class 表(_表):
 		yb = ""
 		ipa = ""
 		js = ""
-		if name in ("汝城", "瑞安東山", "新界客家話", "長壽", "宜章巖泉","郴州","樂昌皈塘","嘉禾普滿","尤溪","晉江", "龍門路溪", "詔安", "道縣官话"):
+		if name in ("汝城", "瑞安東山", "新界客家話", "長壽", "宜章巖泉","郴州","樂昌皈塘","尤溪","晉江", "龍門路溪", "詔安", "道縣官话", "重慶", "樂昌三溪"):
 			hz, yb, js = fs[:3]
-		elif name in ("南通金沙",):
+		elif name in ("通州金沙",):
 			yb, hz, js = fs[:3]
 		elif name in ("江陰", "江陰新橋", "江陰申港"):
 			_, hz, js, yb = fs[:4]
@@ -64,7 +64,7 @@ class 表(_表):
 		elif name in ("惠來隆江",):
 			hz, ipa, js = fs[:3]
 		elif name in ("壽寧平溪"):
-			hz, ipa, js = fs[:3]
+			hz, yb, js = fs[:3]
 			hz = hz.replace("", "□")
 		elif name in ("新會會城",):
 			hz, _, _, ipa = fs[:4]
@@ -87,19 +87,22 @@ class 表(_表):
 			if hz.endswith("-"):
 				hz = hz[:-1]
 				yb = yb + "-"
-		elif name in ("松陽", "臨海", "泰順羅陽", "雲和", "仙居"):
+		elif name in ("臨海", "泰順羅陽", "雲和", "仙居"):
 			hz, _, sy, sd, js = fs[:5]
+			ipa = sy + sd
+		elif name in ("松陽",):
+			hz, _, sy, sd = fs[:4]
 			ipa = sy + sd
 		elif name in ("珠海唐家",):
 			hz, sm, ym, sd, js = fs[7], fs[12], fs[13], fs[14], fs[18]
 			ipa = sm + ym + sd
 		elif name in ("江門",):
-			hz, sm, ym, sd, jso, js = fs[7], fs[16], fs[17], fs[18], fs[8], fs[9]
+			hz, sm, ym, sd, jso, js = fs[7], fs[25], fs[26], fs[27], fs[11], fs[12]
 			ipa = sm + ym + sd
 			if jso: js = jso + "。" + js
 			js = js.strip("。")
 		elif name in ("江門墟頂","江門白沙","江門水南","江門沙仔尾","江門紫萊"):
-			hz, sm, ym, sd, js = fs[0], fs[17], fs[18], fs[11], fs[20] if len(fs) > 20 else ""
+			hz, sm, ym, sd, js = fs[0], fs[6], fs[7], fs[4], fs[9]
 			yb = sm + ym + sd
 		elif name in ("江門禮樂","江門潮連"):
 			hz, sm, ym, sd, js = fs[:5]
@@ -110,7 +113,9 @@ class 表(_表):
 			hz, _, ipa, _, js = fs[:5]
 		elif name in ("武義",):
 			_, hz, _, ipa, js = fs[:5]
-		elif name in ("鳳凰-新豐","潮州","汕頭"):
+		elif name in ("鳳凰-新豐",):
+			hz, py, _, ipa, js = fs[:5]
+		elif name in ("潮州","汕頭"):
 			hz, _, _, ipa, js = fs[:5]
 		elif name in ("汕頭市郊"):
 			hz, _, _, ipa, js = fs[:5]
@@ -141,6 +146,10 @@ class 表(_表):
 		elif name in ("鶴山雅瑤",):
 			hz, sm, ym, sd, _, _, _, js = fs[:8]
 			ipa = sm + ym + sd
+		elif name in ("開平護龍",):
+			hz, sm, ym, sd, js = fs[:5]
+			ipa = sm + ym + sd
+			yb = self.dz2dl(ipa)
 		elif name in ("揭陽",):
 			hz, _, _, _, _, ipa, yd, js = fs[:8]
 			yb = self.dz2dl(ipa)
@@ -190,6 +199,51 @@ class 表(_表):
 			hz, yb, _, js = fs[:4]
 		elif name in ("1818漳州",):
 			hz, yb = fs[0], fs[4]
+		elif name in ("榮縣",):
+			hz,_,_,js,sm,ym,sd = fs[:7]
+			if sm in "ø": sm = ""
+			l = list()
+			for sd in sd.split("或"):
+				yb = self.dz2dl(sm + ym, sd)
+				l.append((hz, yb, js))
+			return l
+		elif name in ("鄭張",):
+			self.ybTrimSpace = False
+			self.isYb = False
+			hz = fs[0]
+			js = fs[16]
+			yb = ("%s%s (%s%s切 %s聲 %s%s)"%(fs[12], f"/{fs[13]}" if fs[13] else "", fs[7],fs[8],fs[9],fs[10],fs[11]))
+		elif name in ("白-沙",):
+			self.isYb = False
+			hz, yb = fs[0], fs[4]
+		elif name in ("中世朝鮮"):
+			self.isYb = False
+			hz = fs[0]
+			yb = "".join(fs[1:4])
+		elif name in ("溫州",):
+			toneValues = {'阳入':8,'阴上':3,'阳平':2,'阴入':7,'阳去':6,'阴平':1,'阴去':5,'阳上':4}
+			_,hz,_,sy,_,_,sd,js = fs[:8]
+			yb = sy + str(toneValues[sd])
+		elif name in ("瑞安陶山",):
+			hz, sm, ym, sd, js, bz = fs[:6]
+			sd = sd.strip("[]")
+			yb = sm + ym + sd
+			js = (js + " " +bz).strip()
+		elif name in ("蒼南宜山",):
+			sm,ym,sd,hz,js = fs[:5]
+			sd = sd.strip("[]")
+			yb = sm + ym + sd
+			js = js.strip("{}")
+		elif name in ("南通", ):
+			hz = fs[1]
+			yb = fs[-6] + fs[-4]
+			js = fs[-7].strip()
+			if len(hz) > 1 and len(js) == 0:
+				js = hz[1:].strip()
+				hz = hz[0]
+		elif name in ("寧德",):
+			hz,_,yb,sd,js = fs
+			yb += self.dz2dl(sd.split("|")[0])
 		elif len(fs) >= 4:
 			hz, _, ipa, js = fs[:4]
 		elif len(fs) == 2:
@@ -200,6 +254,7 @@ class 表(_表):
 			if ipa:
 				yb = self.dz2dl(ipa)
 			if len(hz) != 1 or not yb: return
+			yb = self.normYb(yb)
 			if hz in "?？☐�": hz = "□"
 			return hz, yb, js
 		return

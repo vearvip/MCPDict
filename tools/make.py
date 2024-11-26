@@ -1,19 +1,18 @@
 #!/usr/bin/env python3
 
-import sqlite3, re, os, sys, json
+import sqlite3, os, sys
 from collections import defaultdict
 from time import time
 from tables import *
+import argparse
 
+parser = argparse.ArgumentParser(description='Create mcpdict database')
+parser.add_argument('-省', help='province to include', required=False)
+args, argv = parser.parse_known_args()
 start = time()
 
 dicts = defaultdict(dict)
-#sys.argv.extend(( "1884甯城",))
-if len(sys.argv) > 1:
-	argv = sys.argv[1:]
-	langs = getLangs(dicts, argv)
-else:
-	langs = getLangs(dicts)
+langs = getLangs(dicts, argv, 省=args.省)
 keys = [f"{lang}" for lang in langs]
 fields = [f"`{i}`" for i in keys]
 CREATE = 'CREATE VIRTUAL TABLE mcpdict USING fts3 (%s)' % (",".join(fields))
@@ -36,9 +35,10 @@ for i in sorted(dicts.keys(), key=cjkorder):
 	c.execute(INSERT, v)
 
 #info
-keys = list(langs[xing_keys_len if len(keys) > xing_keys_len else 1].info.keys())
-fields = [f"`{i}`" for i in keys]
-CREATE = 'CREATE VIRTUAL TABLE info USING fts3 (%s)' % (",".join(fields))
+keys = list(langs[辭典數 if len(keys) > 辭典數 else 1].info.keys())
+keys.remove("文件格式")
+keys.remove("跳過行數")
+CREATE = 'CREATE VIRTUAL TABLE info USING fts3 (%s)' % (",".join(keys))
 INSERT = 'INSERT INTO info VALUES (%s)'% (','.join('?' * len(keys)))
 c.execute(CREATE)
 for lang in langs:

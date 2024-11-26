@@ -10,6 +10,8 @@ import inspect
 from openpyxl import load_workbook
 from xlrd import open_workbook
 from docx import Document
+from docx.enum.text import WD_UNDERLINE
+import regex
 
 logging.basicConfig(format='%(message)s', level=logging.INFO)
 
@@ -20,12 +22,6 @@ VARIANT_FILE = f"tables/{SOURCE}/正字.tsv"
 YDS = {"+":"又", "-":"白", "*":"俗", "/":"書","\\":"語","=":"文","?":"存疑", "@": "訓"}
 def getYD(py):
 	return YDS.get(py[-1], "")
-
-def isHZ(c):
-	c = c.strip()
-	if len(c) != 1: return False
-	n = ord(c)
-	return 0x3400<=n<0xA000 or n in (0x25A1, 0x3007) or 0xF900<=n<0xFB00 or 0x20000<=n<=0x323AF
 
 def getCompatibilityVariants():
 	d = dict()
@@ -47,7 +43,7 @@ def getSTVariants(level=2):
 	return d
 
 def getTsvName(xls):
-	return re.sub(r"(\(\d?\))+$", "", xls.rsplit(".", 1)[0]) + ".tsv"
+	return re.sub(r" ?(\(\d{0,3}\))+$", "", xls.rsplit(".", 1)[0]) + ".tsv"
 
 def isXlsx(fname):
 	return fname.endswith("xlsx")
@@ -106,7 +102,20 @@ def docx2tsv(doc):
 		xtime = os.path.getmtime(doc)
 		ttime = os.path.getmtime(tsv)
 		if ttime >= xtime: return
-	lines = [line.text + "\n" for line in Document(doc).paragraphs]
+	lines = []
+	for line in Document(doc).paragraphs:
+		for run in line.runs:
+			if run.font.underline == WD_UNDERLINE.SINGLE:
+				for i in run.text:
+					lines.append(i + "-")
+			elif run.font.underline == WD_UNDERLINE.DOUBLE:
+				for i in run.text:
+					lines.append(i + "=")
+			elif run.font.subscript:
+				lines.append(f"{{{run.text}}}")
+			else:
+				lines.append(run.text)
+		lines.append("\n")
 	t = open(tsv, "w", encoding="U8", newline="\n")
 	t.writelines(lines)
 	t.close()
@@ -123,6 +132,7 @@ class 表:
 	note = ""
 	site = ""
 	url = ""
+	dictionary = False
 
 	disorder = False
 	patches = None
@@ -143,6 +153,12 @@ class 表:
 		if self.__mod: return self.__mod
 		return self.__module__.split(".")[-1]
 
+	def find(self, name):
+		if g := glob(name):
+			return g
+		name = re.sub(".([^.]+)$", "([0-9]).\\1", name)
+		return glob(name)
+
 	@property
 	def spath(self):
 		if self._files:
@@ -154,12 +170,12 @@ class 表:
 		if not sname: sname = f"{self.short}.tsv"
 		if not sname.startswith("/"):
 			sname = self.get_fullname(sname)
-		g = glob(sname)
+		g = self.find(sname)
 		if not g or len(g) != 1:
-			if isXls(sname):
+			if isXls(sname) or isDocx(sname):
 				self._file = getTsvName(self._file)
 				sname = self.get_fullname(self._file)
-				g = glob(sname)
+				g = self.find(sname)
 				if not g or len(g) != 1:
 					logging.error(f"\t\t\t{sname} {g}")
 					return
@@ -169,7 +185,8 @@ class 表:
 		sname = g[0]
 		self._file = os.path.basename(sname)
 		if isXls(sname):
-			page = 1 if self.short in ("中山石岐", ) else 0
+			page = 1 if self.short in ("中山石岐", "通城") else 0
+			if self.short == "開平護龍": page = 3
 			xls2tsv(sname, page)
 			sname = getTsvName(sname)
 		elif isDocx(sname):
@@ -185,6 +202,21 @@ class 表:
 		tpath = os.path.join(self.path, TARGET, str(self))
 		if not tpath.endswith(".tsv"): tpath += ".tsv"
 		return tpath
+
+	def normS(self, s, rep="[\\1]"):
+		s = s.replace("(", "（").replace(")", "）")
+		s = regex.sub("（((?>[^（）]+|(?R))*)）", rep, s)
+		return s
+
+	def normM(self, s, rep="〚\\1〛"):
+		s = s.replace("[", "［").replace("]", "］")
+		s = regex.sub("［((?>[^［］]+|(?R))*)］", rep, s)
+		return s
+
+	def normG(self, s, rep="｛\\1｝"):
+		s = s.replace("｛", "{").replace("｝", "}")
+		s = regex.sub(r"\{((?>[^\{\}]+|(?R))*)\}", rep, s)
+		return s
 
 	def outdated(self):
 		classfile = inspect.getfile(self.__class__)
@@ -232,6 +264,23 @@ class 表:
 	def isDialect(self):
 		return self.langType and not self.langType.startswith("歷史音")
 
+	def isDictionary(self):
+		return self.dictionary
+
+	def normJS(self, js):
+		if not js: return ""
+		last = ""
+		l = list()
+		for i in js:
+			if isHZ(i):
+				if last: l.append(last)
+				last = ""
+				l.append(i)
+			else:
+				last += i
+		if last: l.append(last)
+		return " ".join(l)
+
 	def write(self, d):
 		self.patch(d)
 		t = open(self.tpath, "w", encoding="U8", newline="\n")
@@ -246,7 +295,7 @@ class 表:
 					hz = self.stVariants.get(hz, hz)
 			if not isHZ(hz):
 				if self.isDialect():
-					print("\t\t\t", hz, pys)
+					print(f"\t\t\t【{hz}】不是漢字，讀音爲：", ",".join([i.strip() for i in pys]))
 				continue
 			if self.disorder:
 				pys = sorted(pys,key=lambda x:x.split("\t", 1)[0][-1])
@@ -299,7 +348,13 @@ class 表:
 			if self.isLang():
 				js = ""
 				if "\t" in py: py, js = py.split("\t", 1)
-				yd = getYD(py)
+				if js and self.isLang():
+					js = self.normJS(js)
+				try:
+					yd = getYD(py)
+				except:
+					print("\t\t\t", self.short, py, js)
+					exit(1)
 				if yd and py.count("*") <= 1:
 					js = f"({yd}){js}"
 					py = py[:-1]
@@ -308,8 +363,13 @@ class 表:
 				syd = re.sub(r"\(.*?\)","",py).strip(" *|")
 				if "-" not in syd:
 					self.syds[syd].add(hz)
-				if js: py += "{%s}" % js
+				if js:
+					py += "{%s}" % js
 			else:
+				if self.isDictionary():
+					sep = "▲" if str(self) == "匯纂" else "\t"
+					py2, js = py.split(sep, 1)
+					py = ("\n\n" if self.d[hz] else "") + py2 + sep + self.normJS(js)
 				py = py.replace("\t", "\n")
 			if py not in self.d[hz]:
 				self.d[hz].append(py)
@@ -363,6 +423,7 @@ class 表:
 						js = "\t".join(fs[2:])
 					if not hz or len(hz) != 1: continue
 					if not yb: continue
+					if self.isDialect() and isHZ(yb[0]): continue
 					p = f"{yb}\t{js}"
 					p = p.strip()
 					if p not in d[hz]:
